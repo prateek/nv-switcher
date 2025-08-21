@@ -4,6 +4,9 @@
 import { App, Plugin, PluginSettingTab, Platform, Setting, Notice } from 'obsidian';
 import { HotkeyManager } from './hotkey-manager';
 import { NvModal } from './modal';
+import { SearchProvider } from './search/provider';
+import { BuiltInProvider } from './search/built-in-provider';
+import { parseQuery } from './search/query-parser';
 
 interface NvSwitcherSettings {
 	schemaVersion: number;
@@ -134,6 +137,7 @@ const DEFAULT_SETTINGS: NvSwitcherSettings = {
 export default class NvSwitcherPlugin extends Plugin {
 	settings: NvSwitcherSettings = DEFAULT_SETTINGS;
 	hotkeyManager: HotkeyManager | null = null;
+	private searchProvider: SearchProvider | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -258,6 +262,23 @@ export default class NvSwitcherPlugin extends Plugin {
 	getHotkeyManager(): HotkeyManager | null {
 		return this.hotkeyManager;
 	}
+
+	// Search system accessors
+	getSearchProvider(): SearchProvider {
+		// For now, return the built-in provider
+		// This will be expanded to support multiple backends later
+		if (!this.searchProvider) {
+			this.searchProvider = new BuiltInProvider();
+		}
+		return this.searchProvider;
+	}
+
+	getQueryParser() {
+		return {
+			parseQuery: (input: string, settings: any) => parseQuery(input, settings)
+		};
+	}
+
 }
 
 // Migration function to upgrade settings between schema versions

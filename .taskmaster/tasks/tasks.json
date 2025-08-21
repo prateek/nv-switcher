@@ -15,13 +15,77 @@
       {
         "id": 2,
         "title": "Settings schema and SettingsTab UI",
-        "description": "Implement settings model covering General, Search, Preview, Commands mode, and Hotkeys customization as per PRD, with reactive storage and validation.",
-        "details": "Implementation:\n- Define Settings interface and DEFAULT_SETTINGS including:\n  General: openHotkey (⌘N), createLocation (root|same|fixed), fixedFolder, includeCodeBlocks (false), maxResults (100).\n  Search: backend (built-in|auto|omni), weights (title/headings/path/tags/symbols/body/recency), diacritics (true), regexCandidateK (300).\n  Preview: inlineSnippet (true), fragmentLength (120), maxFragments (3), showFrontmatter (false), showTags (true), showPath (true), highlightCssVar (\"--nv-switcher-highlight-color\").\n  Commands: enableCommandsPrefix (true), showCommandIds (false), openInSplitModifier (\"mod\").\n  Hotkeys: modalActions map: { moveUp, moveDown, open, forceCreate, openInSplit, focusPreview, cycleLeft, cycleRight, close } each as array of key chords, with sensible platform defaults (Cmd on macOS, Ctrl on Win/Linux).\n- SettingsTab: use PluginSettingTab to render toggles/sliders/inputs; validate folder path; persist on change with plugin.saveSettings(); debounce saves.\n- Expose getters to translate weights into scorer config.\n- CSS var: allow user to set custom highlight via settings -> write to documentElement style on load/unload.\nPseudo-code:\ninterface Settings { general: {...}; search: {...}; preview: {...}; commands: {...}; hotkeys: Record<string, string[]> }\nclass NvSwitcherSettingsTab extends PluginSettingTab { display(){ /* build UI, bind to this.plugin.settings */ } }\n",
-        "testStrategy": "Unit:\n- Settings load/save roundtrip with defaults.\n- Validation: creating fixed folder path; toggling diacritics and includeCodeBlocks persists.\n- UI (JSDOM): simulate setting changes and assert plugin.settings updated.\n- Snapshot: ensure weight sliders map to numeric values and within ranges.",
-        "priority": "medium",
+        "description": "Implement comprehensive settings model and SettingsTab UI per PRD (.taskmaster/docs/prd.md), covering General, Search, Preview, Commands mode, and Hotkeys/Keyboard customization with reactive storage, validation, and migrations.",
+        "status": "done",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "priority": "medium",
+        "details": "Source of truth: Use .taskmaster/docs/prd.md (section 8: Settings; section 3: Keyboard; plus related snippets/preview constraints from other sections) for field names, defaults, ranges, and behavior. Where PRD is silent, retain existing defaults.\n\nImplementation:\n- Define Settings interface and DEFAULT_SETTINGS with schemaVersion and complete field mapping as per PRD:\n  schemaVersion: number (start at 1). Used for migrations.\n  general:\n    - openHotkey: string (keyboard chord; default as specified in PRD Keyboard section; fallback Mod+K or ⌘N if not specified).\n    - createLocation: 'root' | 'same' | 'fixed'.\n    - fixedFolder: string (validated; create if missing when selected).\n    - includeCodeBlocks: boolean (default false).\n    - maxResults: number (default 100; min/max bounds per PRD).\n    - debounceMs: number (search input debounce; per PRD, default e.g., 80–150ms range; clamp to [20, 500]).\n    - minQueryLength: number (default 1; clamp to [0, 10]).\n  search:\n    - backend: 'built-in' | 'auto' | 'omni' (per PRD terminology; wire to providers).\n    - weights: { title, headings, path, tags, symbols, body, recency } numbers mapping directly to scorer weights.\n    - diacritics: boolean (default true; fold accents if true).\n    - regexCandidateK: number (default 300; clamp to reasonable bounds, e.g., [50, 2000]).\n    - recencyHalfLifeDays: number (maps to decay used by scorer; PRD value; clamp to [1, 365]).\n    - excludeFolders: string[] (folder paths or glob-like patterns; normalized; used by indexer/search to ignore).\n  preview:\n    - inlineSnippet: boolean (default true).\n    - fragmentLength: number (default 120; clamp to [60, 240] as per PRD/tests).\n    - maxFragments: number (default 3; clamp to [1, 5]).\n    - showFrontmatter: boolean (default false).\n    - showTags: boolean (default true).\n    - showPath: boolean (default true).\n    - highlightCssVar: string (default \"--nv-switcher-highlight-color\").\n    - highlightColor: string (CSS color value; default per PRD; if set, write to documentElement.style for highlightCssVar).\n  commands:\n    - enableCommandsPrefix: boolean (default true; gates \">\" router per PRD).\n    - commandsPrefixChar: string (default '>' per PRD; single visible char; validated non-empty).\n    - showCommandIds: boolean (default false).\n    - openInSplitModifier: 'mod' | 'alt' | 'shift' | 'ctrl' (default per PRD; used to interpret modified open action).\n  keyboard:\n    - chordSeparator: string (default '+', from PRD Keybinding grammar).\n    - platformMetaKey: 'mod' | 'cmdCtrl' (internal helper reflecting PRD guidance; affects display).\n  hotkeys: Record<string, string[]> mapping modal actions to arrays of keyboard chords (strings). Actions include at minimum: moveUp, moveDown, open, forceCreate, openInSplit, focusPreview, cycleLeft, cycleRight, close, toggleCommandsMode, clearQuery, acceptSelection. Defaults must match PRD section 3 per platform (Cmd on macOS, Ctrl on Windows/Linux). Ensure chords follow PRD grammar (e.g., Mod+Enter, Shift+Tab, Ctrl+J, etc.).\n\n- Settings storage:\n  - Reactive load/save on plugin init and SettingsTab changes; debounce saves using requestIdleCallback or setTimeout (~150ms) to avoid churn.\n  - Add migrateSettings(prev: any): Settings that upgrades based on schemaVersion (e.g., v0 -> v1 adds debounceMs, minQueryLength, recencyHalfLifeDays, commandsPrefixChar, highlightColor, keyboard, excludeFolders). Never mutate previous object in-place; return a new Settings with defaults for new fields.\n\n- Validation:\n  - fixedFolder: normalize path; verify or create when createLocation === 'fixed'. Show inline error in SettingsTab if invalid; disable save/selection when invalid.\n  - Numeric ranges: clamp values to PRD-defined ranges; show helper text with ranges under sliders.\n  - commandsPrefixChar: require single non-whitespace glyph; cannot conflict with hotkey chords typing (per PRD notes). If changed, reflect in input router behavior.\n  - hotkeys: parse/normalize chords (case-insensitive keys, normalized modifiers order per PRD). Detect conflicts between actions; render warnings and allow override/reset.\n  - excludeFolders: validate entries; trim; ignore duplicates.\n\n- SettingsTab UI (PluginSettingTab):\n  - Render sections: General, Search, Preview, Commands, Keyboard & Hotkeys (grouped as per PRD). Use toggles, text inputs, dropdowns, sliders with labels/tooltips sourced from PRD copy.\n  - Bind controls to plugin.settings; onChange -> validate -> set -> debounced save.\n  - Hotkeys editor: show list of actions with current chords; add/remove/reset per PRD; indicate platform defaults; show conflict badges.\n  - Weights sliders map to numeric values and persist; provide reset-to-PRD-defaults button per section.\n  - Commands: input for prefix char; toggle enable; toggle showCommandIds; dropdown for split modifier.\n  - Preview: controls for fragmentLength, maxFragments, highlightCssVar, highlightColor; on change, apply CSS var to documentElement; on unload, remove previously set var.\n\n- Expose getters/helpers:\n  - toScorerConfig(): translates settings.search.weights, diacritics, recencyHalfLifeDays into scorer module configuration.\n  - isCommandsQuery(input: string): checks prefix based on enableCommandsPrefix and commandsPrefixChar.\n  - getNormalizedHotkeys(): returns platform-specific chords expanded and normalized for use in modal.\n\n- CSS var application:\n  - On load and whenever preview.highlightColor or preview.highlightCssVar changes, set document.documentElement.style.setProperty(highlightCssVar, highlightColor). On unload/reset, removeProperty.\n\nPseudo-code:\ninterface Settings { schemaVersion: number; general: {...}; search: {...}; preview: {...}; commands: {...}; keyboard: {...}; hotkeys: Record<string, string[]> }\nfunction migrateSettings(prev:any): Settings { /* add missing fields with PRD defaults; bump schemaVersion */ }\nclass NvSwitcherSettingsTab extends PluginSettingTab { display(){ /* build UI per PRD; bind, validate, debounce save */ } }\n",
+        "testStrategy": "Unit:\n- Load/save roundtrip with DEFAULT_SETTINGS including new fields (schemaVersion, debounceMs, minQueryLength, recencyHalfLifeDays, commandsPrefixChar, highlightColor, excludeFolders, keyboard). Unknown fields preserved; missing fields filled with defaults via migrateSettings.\n- Migration: simulate old settings (v0) and ensure migrateSettings returns v1 with correct defaults; no data loss for existing fields.\n- Validation: fixedFolder path normalization/creation; numeric clamping for fragmentLength [60,240], maxFragments [1,5], regexCandidateK bounds, debounceMs bounds; commandsPrefixChar single-glyph requirement; excludeFolders sanitized.\n- Keyboard/Hotkeys:\n  - Normalize \"mod\" to Cmd/Ctrl per platform; parse chords order; detect conflicts; ensure defaults match PRD section 3.\n  - openInSplitModifier behavior: verify interpretation in key handling helper.\n- Commands router: when enableCommandsPrefix=true and commandsPrefixChar='>', input starting with '>' routes to commands; when disabled or char changed, router honors setting.\n- Weights: ensure sliders map to numeric values and persist within ranges; toScorerConfig() produces expected shape for scorer module.\n- CSS: setting highlightCssVar/highlightColor writes to documentElement.style and removes on unload.\n\nUI (JSDOM):\n- Render SettingsTab and simulate user interactions: toggling diacritics/includeCodeBlocks; editing commandsPrefixChar; adjusting sliders; adding/removing hotkey chords; adding excludeFolders. Assert plugin.settings reflects changes and debounced saves occur (spy on saveSettings).\n- Snapshot critical UI groups (General, Search/weights, Preview, Commands, Hotkeys) for structure and labels per PRD.\n",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define Settings types, DEFAULT_SETTINGS, and schemaVersion per PRD",
+            "description": "",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Implement migrateSettings(prev) to upgrade legacy settings to v1",
+            "description": "",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Build SettingsTab UI with sections and controls mapped to PRD fields",
+            "description": "",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Implement validation for paths, numeric ranges, prefix char, and hotkey conflicts",
+            "description": "",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Apply highlight CSS variable on load/changes and clean up on unload",
+            "description": "",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 6,
+            "title": "Expose helpers: toScorerConfig, isCommandsQuery, getNormalizedHotkeys",
+            "description": "",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          },
+          {
+            "id": 7,
+            "title": "Write unit and JSDOM tests for settings, UI bindings, keyboard, and migrations",
+            "description": "",
+            "status": "done",
+            "dependencies": [],
+            "details": "",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 3,
@@ -114,7 +178,7 @@
     ],
     "metadata": {
       "created": "2025-08-21T01:58:07.396Z",
-      "updated": "2025-08-21T02:59:18.840Z",
+      "updated": "2025-08-21T03:22:19.589Z",
       "description": "Tasks for master context"
     }
   }

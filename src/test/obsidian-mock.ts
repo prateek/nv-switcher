@@ -95,3 +95,71 @@ export class Component {
 	registerDomEvent = vi.fn()
 	registerInterval = vi.fn()
 }
+
+export const Platform = {
+	isMacOS: false,
+	isIosApp: false,
+	isAndroidApp: false,
+	isMobile: false,
+	isDesktopApp: true,
+	isWin: process.platform === 'win32',
+	isLinux: process.platform === 'linux',
+	isMac: process.platform === 'darwin'
+}
+
+export class Setting {
+	settingEl: HTMLElement = document.createElement('div')
+	
+	constructor(containerEl: HTMLElement) {
+		containerEl.appendChild(this.settingEl)
+	}
+
+	setName(name: string) {
+		return this
+	}
+
+	setDesc(desc: string) {
+		return this
+	}
+
+	addText(callback: (text: any) => any) {
+		const textComponent = {
+			setPlaceholder: vi.fn().mockReturnThis(),
+			setValue: vi.fn().mockReturnThis(),
+			onChange: vi.fn().mockReturnThis(),
+			setDynamicTooltip: vi.fn().mockReturnThis()
+		}
+		callback(textComponent)
+		return this
+	}
+
+	addToggle(callback: (toggle: any) => any) {
+		const toggleComponent = {
+			setValue: vi.fn().mockReturnThis(),
+			onChange: vi.fn().mockReturnThis()
+		}
+		callback(toggleComponent)
+		return this
+	}
+
+	addDropdown(callback: (dropdown: any) => any) {
+		const dropdownComponent = {
+			addOption: vi.fn().mockReturnThis(),
+			setValue: vi.fn().mockReturnThis(),
+			onChange: vi.fn().mockReturnThis()
+		}
+		callback(dropdownComponent)
+		return this
+	}
+
+	addSlider(callback: (slider: any) => any) {
+		const sliderComponent = {
+			setLimits: vi.fn().mockReturnThis(),
+			setValue: vi.fn().mockReturnThis(),
+			onChange: vi.fn().mockReturnThis(),
+			setDynamicTooltip: vi.fn().mockReturnThis()
+		}
+		callback(sliderComponent)
+		return this
+	}
+}

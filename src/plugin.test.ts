@@ -20,21 +20,17 @@ describe('NvSwitcherPlugin', () => {
 		const plugin = new NvSwitcherPlugin(mockApp, mockManifest)
 		
 		// Test initial state before loading
-		expect(plugin.settings).toEqual({
-			defaultHotkey: 'Ctrl+O',
-			searchLimit: 50,
-			previewEnabled: true
-		})
+		expect(plugin.settings.schemaVersion).toBe(1)
+		expect(plugin.settings.general.maxResults).toBe(100)
+		expect(plugin.settings.preview.inlineSnippet).toBe(true)
 		
 		// Load the plugin
 		await plugin.onload()
 		
 		// Verify settings remain correct after loading  
-		expect(plugin.settings).toEqual({
-			defaultHotkey: 'Ctrl+O',
-			searchLimit: 50,
-			previewEnabled: true
-		})
+		expect(plugin.settings.schemaVersion).toBe(1)
+		expect(plugin.settings.general.includeCodeBlocks).toBe(false)
+		expect(plugin.settings.search.backend).toBe('built-in')
 		
 		// Verify onload completed without throwing errors
 		expect(plugin.app).toBe(mockApp)
@@ -54,14 +50,53 @@ describe('NvSwitcherPlugin', () => {
 		
 		const plugin = new NvSwitcherPlugin(mockApp, mockManifest)
 		plugin.loadData = vi.fn().mockResolvedValue({
-			searchLimit: 100,
+			schemaVersion: 1,
+			general: {
+				maxResults: 200,
+				includeCodeBlocks: true
+			},
+			preview: {
+				inlineSnippet: false
+			}
+		})
+		
+		await plugin.loadSettings()
+		
+		expect(plugin.settings.general.maxResults).toBe(200)
+		expect(plugin.settings.general.includeCodeBlocks).toBe(true) 
+		expect(plugin.settings.preview.inlineSnippet).toBe(false)
+		expect(plugin.settings.general.openHotkey).toBeDefined() // Should keep default
+	})
+
+	it('should migrate v0 settings to v1', async () => {
+		const mockApp = new App()
+		const mockManifest = { 
+			id: 'nv-switcher', 
+			version: '1.0.0',
+			name: 'nv-switcher',
+			author: 'Prateek Rungta',
+			minAppVersion: '1.5.0',
+			description: 'Test plugin'
+		}
+		
+		const plugin = new NvSwitcherPlugin(mockApp, mockManifest)
+		plugin.loadData = vi.fn().mockResolvedValue({
+			// v0 legacy settings
+			defaultHotkey: 'Ctrl+K',
+			searchLimit: 75,
 			previewEnabled: false
 		})
 		
 		await plugin.loadSettings()
 		
-		expect(plugin.settings.searchLimit).toBe(100)
-		expect(plugin.settings.previewEnabled).toBe(false)
-		expect(plugin.settings.defaultHotkey).toBe('Ctrl+O') // Should keep default
+		// Check migrated values
+		expect(plugin.settings.schemaVersion).toBe(1)
+		expect(plugin.settings.general.openHotkey).toBe('Ctrl+K')
+		expect(plugin.settings.general.maxResults).toBe(75)
+		expect(plugin.settings.preview.inlineSnippet).toBe(false)
+		
+		// Check new fields have defaults
+		expect(plugin.settings.search.backend).toBe('built-in')
+		expect(plugin.settings.commands.enableCommandsPrefix).toBe(true)
 	})
 })

@@ -1,0 +1,77 @@
+{
+	"meta": {
+		"generatedAt": "2025-08-21T03:31:50.602Z",
+		"tasksAnalyzed": 8,
+		"totalTasks": 10,
+		"analysisCount": 8,
+		"thresholdScore": 5,
+		"projectName": "Task Master",
+		"usedResearch": false
+	},
+	"complexityAnalysis": [
+		{
+			"taskId": 3,
+			"taskTitle": "Commands registration and Hotkey handling",
+			"complexityScore": 5,
+			"recommendedSubtasks": 6,
+			"expansionPrompt": "Expand into ~6 subtasks:\n1) Implement HotkeyManager: parse and match chords like Mod-Enter, Shift-Enter, Alt-ArrowLeft/Right; use Obsidian Keymap.isModifier and Platform.isMacOS; map 'Mod' to Meta on macOS and Ctrl elsewhere.\n2) Register commands: nv-switcher:open (default Mod+N) and nv-switcher:toggle-inline-snippet (no default); wire callbacks to modal open and settings toggle.\n3) Centralize in-modal hotkey routing: J/K, ArrowUp/Down, Tab, Esc (twice to close), Alt-Left/Right, Shift+Enter, Mod+Enter; read from settings.hotkeys at runtime.\n4) Implement open-in-split: in-modal action or Mod+Enter uses workspace.getLeaf(true) and opens selected file.\n5) Settings integration: live rebinds; validate chords; persist and reflect changes without reload.\n6) Integration tests (JSDOM): Mod+N opens modal; navigation and actions respond to mapped keys; rebinding updates behavior; split-open opens in new leaf.\nDeliverables: HotkeyManager.ts, command registration in plugin entry, modal key handlers, tests with coverage.\nAcceptance: All mapped keys work cross-platform; rebinds take effect at runtime; split-open verified.",
+			"reasoning": "Medium complexity: API calls are straightforward, but cross-platform hotkey parsing/matching and live settings-driven rebinding add nuance and test coverage requirements."
+		},
+		{
+			"taskId": 4,
+			"taskTitle": "Search types and provider interface",
+			"complexityScore": 4,
+			"recommendedSubtasks": 5,
+			"expansionPrompt": "Expand into ~5 subtasks:\n1) Define core types: Doc, ParsedQuery, MatchSpan, SearchResult in a types module; include JSDoc.\n2) Declare SearchProvider interface with Promise-based signatures and discriminated unions for provider selection (BuiltInProvider default).\n3) Implement normalizeText(str, diacritics) utility with NFD stripping and lowercasing; export tokenization helpers if needed.\n4) Runtime guards and type-level assertions (tsd or compile-time checks) to ensure schemas and narrowing.\n5) Contract tests: mock provider implementing the interface; ensure modal consumes it without coupling.\nDeliverables: src/search/types.ts, src/search/provider.ts, src/search/normalize.ts, unit/contract tests.\nAcceptance: Types compile, provider interface stable, normalizeText behaves with/without diacritics, mock provider passes contract tests.",
+			"reasoning": "Type modeling and interface design are clear but must be precise for downstream modules; modest complexity with emphasis on correctness and ergonomics."
+		},
+		{
+			"taskId": 5,
+			"taskTitle": "Vault indexer with incremental updates and persistence",
+			"complexityScore": 8,
+			"recommendedSubtasks": 9,
+			"expansionPrompt": "Expand into ~9 subtasks:\n1) Scaffold VaultIndex class with indexAll, upsert, remove; define Doc extraction contract.\n2) Metadata extraction: title, path tokens, headings, tags (frontmatter + inline), symbols (links, block refs, code labels) via metadataCache.\n3) Body extraction: read file, normalize case/accents; optional strip fenced code blocks per settings; cap large bodies.\n4) Persistence cache: load/save mtime/size map; skip unchanged files; migration safety.\n5) Initial indexing: fast pass (meta only) then queue body extraction for later.\n6) Incremental updates: wire app.vault and metadataCache events (create/modify/delete/rename/changed); debounce/coalesce.\n7) Background queue: batch with setTimeout/requestIdleCallback; concurrency limits; mobile-safe chunking.\n8) Provider integration: call provider.upsert/remove with partial/full docs accordingly.\n9) Tests: simulate TFile and cache; verify extraction, persistence, incremental updates, batching behavior.\nDeliverables: src/indexer/vaultIndex.ts, queue utility, persistence helpers, unit tests.\nAcceptance: Unchanged files skipped, events keep index in sync, background body indexing does not block UI, provider receives accurate docs.",
+			"reasoning": "High complexity due to Obsidian APIs, async IO, event-driven updates, persistence, and performance/queuing concerns across platforms."
+		},
+		{
+			"taskId": 6,
+			"taskTitle": "Query parser with filters, phrases, OR/NOT, regex, and commands mode",
+			"complexityScore": 7,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "Expand into ~7 subtasks:\n1) Input router: detect commands mode via '>' and settings flag; return ParsedQuery with mode.\n2) Phrase extraction: pull quoted segments, unescape, store separately; remove from working string.\n3) Regex parsing: extract /pattern/flags, validate RegExp; capture errors without throwing; remove from working string.\n4) Tokenization and classification: split by whitespace; handle -exclude, OR delimiters, tag: and #foo, path:, in:, field prefixes (# for headings, @ for symbols), default terms.\n5) OR group assembly and NOT handling; ensure AND defaults otherwise; normalize tokens.\n6) Build highlight regex helper for terms/phrases (word-boundary aware, escaped).\n7) Unit tests covering all cases including invalid regex, empty queries, and edge cases.\nDeliverables: src/search/parseQuery.ts, highlightRegex helper, unit tests.\nAcceptance: ParsedQuery reflects modes, filters, phrases, OR/NOT, and regex accurately; invalid regex is flagged but non-fatal; highlight regex built correctly.",
+			"reasoning": "Multiple parsing features and edge cases (phrases, regex, boolean logic) make this moderately complex with careful token handling."
+		},
+		{
+			"taskId": 7,
+			"taskTitle": "Scoring model with fuzzy/prefix and recency bonus",
+			"complexityScore": 7,
+			"recommendedSubtasks": 7,
+			"expansionPrompt": "Expand into ~7 subtasks:\n1) Reuse normalize/tokenization utilities with diacritic folding; ensure consistent casing.\n2) Implement efficient Damerau-Levenshtein (cap distance at 2) and prefix short-circuit in scoreToken.\n3) Field-level fuzzy scoring: per-term max across tokens; aggregate across terms for title, headings, path, tags, symbols, body.\n4) Phrase boosts: detect exact phrase occurrences in title/body and add +0.25 per occurrence (bounded).\n5) Recency bonus: exponential decay with half-life from settings; clamp to [0, 0.5].\n6) Overall scorer: apply configurable weights, excludes handling (penalty or filter), and return normalized score.\n7) Unit tests for weights ordering, prefix > fuzzy, diacritics, recency behavior, excludes.\nDeliverables: src/search/scorer.ts, distance util, unit tests.\nAcceptance: Deterministic ranking shifts with weights, prefix preferred, diacritics folded, recency bonus applied within cap, excludes enforced.",
+			"reasoning": "Algorithmic work with performance constraints across multiple fields and bonuses; careful tuning and tests required."
+		},
+		{
+			"taskId": 8,
+			"taskTitle": "Built-in search provider with inverted index and regex post-filter",
+			"complexityScore": 9,
+			"recommendedSubtasks": 10,
+			"expansionPrompt": "Expand into ~10 subtasks:\n1) Define core data structures: postings by term per field with frequencies/positions; doc store.\n2) Tokenization and normalization pipeline shared with scorer; body size cap enforcement.\n3) Index build: indexAll from Doc[]; persist postings and metadata; compute positions per field.\n4) Upsert/remove: update postings and doc store incrementally; handle field-level diffs.\n5) Candidate gathering: union by terms, enforce AND by intersection unless OR groups present.\n6) Filters: tags, path prefix, in-folder, and field restriction (#/@) applied pre-scoring.\n7) Scoring: integrate scorer; maintain top-N via heap up to maxResults.\n8) Regex post-filter: apply to top-K candidates; discard non-matches; handle invalid regex gracefully.\n9) MatchSpans generation: approximate from token positions and from regex matches for highlighting.\n10) Unit tests: deterministic top-k, filters correctness, regex K-cap, updates, empty query -> recent by mtime.\nDeliverables: src/search/providers/builtIn.ts, supporting utils, unit tests.\nAcceptance: Correct results ordering and filtering, efficient top-K selection, regex applied only to K candidates, incremental updates keep index consistent.",
+			"reasoning": "Highest complexity: custom inverted index, boolean candidate logic, scoring integration, regex post-filter, and incremental maintenance with performance guarantees."
+		},
+		{
+			"taskId": 9,
+			"taskTitle": "Modal UI with results, create/open semantics, commands mode, and preview",
+			"complexityScore": 8,
+			"recommendedSubtasks": 10,
+			"expansionPrompt": "Expand into ~10 subtasks:\n1) Modal scaffold: input, results listbox, preview pane; lifecycle wiring.\n2) Query pipeline: debounce, parse, call provider; empty query shows recent.\n3) Results rendering: title, inline snippet with <mark>, right-side mtime/path.\n4) Snippet and highlight utilities: best-first fragment (~120 chars), merge overlaps, single combined regex; HTML escape.\n5) Keyboard and focus management: Arrow/J/K nav, Tab to preview, Esc to input/close, Alt-Left/Right fragment cycling, Mod+Enter split open.\n6) Commands mode: '>' routing, list commands, fuzzy filter, Enter executes, Mod+Enter split when applicable.\n7) Create/open semantics: Enter open or create when zero results; Shift+Enter force-create; handle folder/Note path, create folders as needed; collision opens existing.\n8) Open in leaf/split: workspace.getLeaf(isSplit) and openFile.\n9) Accessibility: roles, aria-selected, focus ring, button aria-labels; virtualization for >200 results (optional).\n10) Integration tests (JSDOM): input typing updates list within budget, open/create flows, commands execution, navigation/focus, fragment cycling, zero-result state.\nDeliverables: src/ui/modal.tsx (or DOM impl), snippet/highlight modules, styles, tests.\nAcceptance: Smooth keyboard UX, accurate snippets/highlights, commands mode works, create/open rules honored, accessible roles set.",
+			"reasoning": "Complex UI with keyboard UX, accessibility, preview/snippet logic, and commands/create flows; multiple integration points and states to handle."
+		},
+		{
+			"taskId": 10,
+			"taskTitle": "Test suites (unit and integration) and performance validation",
+			"complexityScore": 7,
+			"recommendedSubtasks": 8,
+			"expansionPrompt": "Expand into ~8 subtasks:\n1) Vitest configuration: jsdom for integration, node for unit; scripts and coverage thresholds (>=80%).\n2) Unit tests: queryParser cases (>, #/@, tag/path/in, phrase, regex, OR, -exclude, empty).\n3) Unit tests: scorer weights, prefix vs fuzzy, diacritics, recency, excludes.\n4) Unit tests: snippet/highlight behavior (fragments, merge, bounds, escape/marking).\n5) Unit tests: vault indexer (add/modify/delete/rename), metadata extraction, includeCodeBlocks toggle, persistence.\n6) Unit tests: built-in provider (indexAll/upsert/remove/query), filters, regex top-K, empty -> recent.\n7) Integration tests (JSDOM): modal behaviors (open/create, commands execution, navigation, focus, fragment cycling, zero-result, split-open).\n8) Performance harness: seed 10k synthetic docs; measure pipeline under 200ms for typical queries; ensure no long tasks (>50ms) in mobile simulation.\nDeliverables: tests directory with suites, fixtures/mocks, CI config enforcing gates.\nAcceptance: All suites pass with coverage threshold; perf checks within budget; CI green on PR and release.",
+			"reasoning": "Broad but systematic effort to cover core logic and UI; complexity stems from breadth, mocking Obsidian APIs, and adding performance assertions."
+		}
+	]
+}

@@ -106,8 +106,66 @@
         "testStrategy": "Unit:\n- Type-level tests via tsd or compile checks.\n- Runtime guards: narrow ParsedQuery fields; ensure SearchResult schema contains required fields.\n- Contract tests: mock provider implementing interface, consumed by modal without knowledge of implementation.",
         "priority": "medium",
         "dependencies": [],
-        "status": "pending",
-        "subtasks": []
+        "status": "done",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Define core search domain types",
+            "description": "Create and export TypeScript types for Doc, ParsedQuery, MatchSpan, and SearchResult with comprehensive JSDoc in a dedicated module.",
+            "dependencies": [],
+            "details": "Deliverable: src/search/types.ts. Actions: 1) Implement types per spec: Doc = { id: string; title: string; path: string[]; tags: string[]; headings: string[]; symbols: string[]; body: string; mtime: number; size: number }; ParsedQuery = { raw: string; mode: 'files'|'commands'; terms: string[]; phrases: string[]; excludes: string[]; orGroups: string[][]; filters: { tag?: string[]; path?: string[]; in?: string[]; field?: 'headings'|'symbols' }; regex?: { source: string; flags: string } }; MatchSpan = { field: keyof Doc; start: number; end: number }; SearchResult = { id: string; score: number; matchSpans: MatchSpan[] }. 2) Add TSDoc for each type and field describing semantics and constraints (e.g., units for mtime, size; field-specific meaning of MatchSpan). 3) Export supporting utility types if helpful (e.g., QueryMode, Filters) without changing the public shapes. Acceptance: file compiles, exports match the given shapes, and JSDoc renders in editors.\n<info added on 2025-08-21T03:34:33.235Z>\n- Implementation complete in src/search/types.ts: Doc, ParsedQuery, MatchSpan, and SearchResult created per spec.\n- Comprehensive JSDoc added for all types and fields, including units (mtime in ms since epoch, size in bytes) and field-specific MatchSpan semantics.\n- Exported utility types to support consumers without changing public shapes: QueryMode, QueryFilters, SearchableField, FieldWeights, and QueryOptions.\n- Verified compilation and type exports; JSDoc renders correctly in editors. Acceptance criteria satisfied.\n</info added on 2025-08-21T03:34:33.235Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 2,
+            "title": "Declare SearchProvider interface and provider selection unions",
+            "description": "Define the async SearchProvider interface with Promise-based methods and discriminated unions for provider selection, defaulting to BuiltInProvider.",
+            "dependencies": [
+              "4.1"
+            ],
+            "details": "Deliverable: src/search/provider.ts. Actions: 1) Define interface SearchProvider with methods: indexAll(docs: Doc[]): Promise<void>; upsert(doc: Doc): Promise<void>; remove(id: string): Promise<void>; query(q: ParsedQuery, opts?: { limit?: number; signal?: AbortSignal }): Promise<SearchResult[]>; clear(): Promise<void>. 2) Export discriminated union for provider selection, e.g., type ProviderConfig = { kind: 'builtIn'; options?: Record<string, unknown> } | { kind: 'external'; name: string; options?: Record<string, unknown> }; with 'builtIn' as default. 3) Export a factory signature createProvider(config?: ProviderConfig): SearchProvider, with default config { kind: 'builtIn' } and placeholder stubs/types only (no built-in implementation here). 4) Add JSDoc documenting lifecycle, threading/async expectations, and replaceability guarantees. Acceptance: Interface compiles against types from 4.1; union discriminates on kind; default selection is built-in; no implementation-specific coupling.\n<info added on 2025-08-21T03:41:45.237Z>\n- Completed src/search/provider.ts implementation:\n  - Implemented SearchProvider interface with all async methods.\n  - Defined discriminated union ProviderConfig with BuiltInProviderConfig and ExternalProviderConfig; default is { kind: 'builtIn' }.\n  - Implemented createProvider factory using stub built-in/external providers for type safety only.\n  - Added type guards: isBuiltInProvider and isExternalProvider.\n  - Wrote comprehensive JSDoc covering lifecycle, async/abort semantics, threading expectations, and replaceability guarantees.\n  - Verified the module compiles and references Doc, ParsedQuery, and SearchResult from types.ts without implementation coupling.\n</info added on 2025-08-21T03:41:45.237Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 3,
+            "title": "Implement text normalization and tokenization utilities",
+            "description": "Provide normalizeText(str, diacritics) and basic tokenization helpers to support providers and query handling.",
+            "dependencies": [
+              "4.1"
+            ],
+            "details": "Deliverable: src/search/normalize.ts. Actions: 1) Implement export function normalizeText(str: string, diacritics: boolean): string that lowercases and, when diacritics === false, applies Unicode NFD and strips combining marks (\\p{M}) with a Unicode-aware regex; preserve whitespace. 2) Export helper tokenizeWords(input: string): string[] that uses normalizeText with diacritics setting and splits on non-word boundaries while preserving Unicode letters and numbers. 3) Export maybeNormalizeRegex(rx?: { source: string; flags: string }): RegExp | undefined with try/catch to safely construct RegExp, returning undefined on failure (to aid providers). 4) Add JSDoc and examples for expected behavior (e.g., 'Café' -> 'cafe' when diacritics=false; 'Café' -> 'café' when true). Acceptance: Module compiles; utilities are pure and side-effect free; behavior matches description.\n<info added on 2025-08-21T03:46:11.465Z>\nImplementation complete. Added:\n- normalizeText(str, diacritics) with lowercase + optional NFD diacritic folding using Unicode property escapes; preserves whitespace.\n- tokenizeWords(input) that normalizes then splits with Unicode-aware word matching to support international scripts.\n- maybeNormalizeRegex(rx) that safely constructs a RegExp and returns undefined on failure.\n- JSDoc with examples; resolved a regex literal in comments that broke compilation.\n- Bonus utilities: escapeRegex(str) to safely escape user input; createHighlightRegex(terms, { diacritics }) to build a highlight pattern consistent with normalization; compareStrings(a, b, { diacritics }) for stable, normalized comparisons.\n\nAll functions are pure and side-effect free, and the module compiles successfully.\n</info added on 2025-08-21T03:46:11.465Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 4,
+            "title": "Add runtime guards and type-level assertions",
+            "description": "Introduce type guards for the core types and compile-time assertions to aid narrowing and schema validation.",
+            "dependencies": [
+              "4.1",
+              "4.2"
+            ],
+            "details": "Deliverables: src/search/guards.ts, and minimal type assertion scaffolding. Actions: 1) Implement type guards: isDoc(v: unknown): v is Doc; isParsedQuery(v: unknown): v is ParsedQuery; isMatchSpan(v: unknown): v is MatchSpan; isSearchResult(v: unknown): v is SearchResult. 2) Use structural checks only (presence and types of required fields) and shallow validation for arrays and primitives. 3) Provide helper assertIsParsedQuery(q: unknown): asserts q is ParsedQuery for consumer convenience. 4) Add a small types-only file tests/type-assertions.ts using expectTypeOf (from Vitest) or TS compile-time patterns to assert assignability of typical shapes; wire into test/typecheck by reusing the existing typecheck script. Acceptance: Guards correctly narrow types in sample snippets; compile-time assertions pass.\n<info added on 2025-08-21T03:48:46.229Z>\n- Implemented comprehensive runtime guards in src/search/guards.ts: isDoc, isParsedQuery, isMatchSpan, isSearchResult with structural, shallow validation only.\n- Added helper guards for nested shapes: isQueryMode and isQueryFilters to validate ParsedQuery.mode and ParsedQuery.filters.\n- Added assertion functions that throw TypeError on invalid input: assertIsParsedQuery, assertIsDoc, assertIsSearchResult, assertIsMatchSpan.\n- Added array validators: areValidDocs and areValidSearchResults using the per-item guards.\n- Created tests/type-assertions.ts with Vitest’s expectTypeOf to assert assignability and narrowing for typical shapes; wired into the existing typecheck script.\n- Acceptance update: guards narrow types in example usages; assertion functions throw on invalid input; array validators return correct booleans; compile-time assertions pass; module builds successfully.\n</info added on 2025-08-21T03:48:46.229Z>",
+            "status": "done",
+            "testStrategy": ""
+          },
+          {
+            "id": 5,
+            "title": "Write contract tests with a mock provider and consumer",
+            "description": "Create a mock SearchProvider and contract tests to verify interface compliance, provider swapping, and normalizeText behavior.",
+            "dependencies": [
+              "4.1",
+              "4.2",
+              "4.3",
+              "4.4"
+            ],
+            "details": "Deliverables: tests/provider.contract.test.ts, tests/normalize.test.ts (Vitest). Actions: 1) Implement MockProvider that satisfies SearchProvider, storing docs in-memory and returning deterministic SearchResult arrays for given ParsedQuery inputs. 2) Write contract tests that: a) exercise indexAll/upsert/remove/clear/query with Promises; b) validate query returns SearchResult[] with required fields and that guards accept them; c) demonstrate swapping providers by injecting MockProvider into a minimal consumer stub (simulating the modal) without changing consumer code. 3) Add tests for normalizeText with/without diacritics and tokenizeWords edge cases (Unicode, punctuation). 4) Include a failing-regex case verifying maybeNormalizeRegex returns undefined and does not throw. Acceptance: All tests pass; types compile; provider swapping requires no consumer changes; normalizeText behaves per spec.\n<info added on 2025-08-21T04:00:56.676Z>\n- Implemented MockProvider class satisfying SearchProvider with in-memory storage and deterministic SearchResult outputs for given ParsedQuery inputs.\n- Added tests/provider.contract.test.ts and tests/normalize.test.ts.\n- Contract tests validate Promise-based indexAll, upsert, remove, clear, and query; ensure SearchResult schema and guards; verify query options handling (filters, regex, modes); and confirm provider swapping by injecting MockProvider into a consumer stub without code changes.\n- Normalization test suite covers diacritic folding, Unicode and punctuation tokenization, regex safety (maybeNormalizeRegex returns undefined on invalid patterns), and edge cases.\n- Fixed createHighlightRegex to support partial matching and corrected combining character expectations; wrapped type assertions within proper Vitest test blocks.\n- Outcome: all 61 tests passing; types compile; provider swapping behavior verified.\n</info added on 2025-08-21T04:00:56.676Z>",
+            "status": "done",
+            "testStrategy": ""
+          }
+        ]
       },
       {
         "id": 5,
@@ -178,7 +236,7 @@
     ],
     "metadata": {
       "created": "2025-08-21T01:58:07.396Z",
-      "updated": "2025-08-21T03:22:19.589Z",
+      "updated": "2025-08-21T04:01:14.254Z",
       "description": "Tasks for master context"
     }
   }

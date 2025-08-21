@@ -35,9 +35,66 @@ var plugin = (() => {
   });
   var import_obsidian = __require("obsidian");
   var DEFAULT_SETTINGS = {
-    defaultHotkey: "Ctrl+O",
-    searchLimit: 50,
-    previewEnabled: true
+    schemaVersion: 1,
+    general: {
+      openHotkey: import_obsidian.Platform.isMacOS ? "\u2318N" : "Ctrl+N",
+      createLocation: "root",
+      fixedFolder: "",
+      includeCodeBlocks: false,
+      maxResults: 100,
+      debounceMs: 150,
+      minQueryLength: 1
+    },
+    search: {
+      backend: "built-in",
+      weights: {
+        title: 4,
+        headings: 2,
+        path: 1.5,
+        tags: 1.5,
+        symbols: 1.5,
+        body: 1,
+        recency: 0.5
+      },
+      diacritics: true,
+      regexCandidateK: 300,
+      recencyHalfLifeDays: 30,
+      excludeFolders: []
+    },
+    preview: {
+      inlineSnippet: true,
+      fragmentLength: 120,
+      maxFragments: 3,
+      showFrontmatter: false,
+      showTags: true,
+      showPath: true,
+      highlightCssVar: "--nv-switcher-highlight-color",
+      highlightColor: ""
+    },
+    commands: {
+      enableCommandsPrefix: true,
+      commandsPrefixChar: ">",
+      showCommandIds: false,
+      openInSplitModifier: "mod"
+    },
+    keyboard: {
+      chordSeparator: "+",
+      platformMetaKey: import_obsidian.Platform.isMacOS ? "mod" : "cmdCtrl"
+    },
+    hotkeys: {
+      moveUp: [import_obsidian.Platform.isMacOS ? "\u2318K" : "Ctrl+K", "ArrowUp"],
+      moveDown: [import_obsidian.Platform.isMacOS ? "\u2318J" : "Ctrl+J", "ArrowDown"],
+      open: ["Enter"],
+      forceCreate: ["Shift+Enter"],
+      openInSplit: [import_obsidian.Platform.isMacOS ? "\u2318Enter" : "Ctrl+Enter"],
+      focusPreview: ["Tab"],
+      cycleLeft: [import_obsidian.Platform.isMacOS ? "\u2325ArrowLeft" : "Alt+ArrowLeft"],
+      cycleRight: [import_obsidian.Platform.isMacOS ? "\u2325ArrowRight" : "Alt+ArrowRight"],
+      close: ["Escape"],
+      toggleCommandsMode: [">"],
+      clearQuery: [import_obsidian.Platform.isMacOS ? "\u2318Backspace" : "Ctrl+Backspace"],
+      acceptSelection: ["Enter"]
+    }
   };
   var NvSwitcherPlugin = class extends import_obsidian.Plugin {
     constructor() {
@@ -57,26 +114,234 @@ var plugin = (() => {
       this.addSettingTab(new NvSwitcherSettingsTab(this.app, this));
     }
     onunload() {
+      this.removeHighlightColor();
     }
     async loadSettings() {
-      this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+      const data = await this.loadData();
+      this.settings = migrateSettings(data);
+      this.applyHighlightColor();
     }
     async saveSettings() {
       await this.saveData(this.settings);
     }
+    applyHighlightColor() {
+      if (this.settings.preview.highlightColor) {
+        document.documentElement.style.setProperty(
+          this.settings.preview.highlightCssVar,
+          this.settings.preview.highlightColor
+        );
+      }
+    }
+    removeHighlightColor() {
+      document.documentElement.style.removeProperty(this.settings.preview.highlightCssVar);
+    }
+    // Expose helper methods for other modules
+    toScorerConfig() {
+      return toScorerConfig(this.settings);
+    }
+    isCommandsQuery(input) {
+      return isCommandsQuery(input, this.settings);
+    }
+    getNormalizedHotkeys() {
+      return getNormalizedHotkeys(this.settings);
+    }
   };
+  function migrateSettings(prev) {
+    if (!prev) {
+      return { ...DEFAULT_SETTINGS };
+    }
+    if (prev.schemaVersion === DEFAULT_SETTINGS.schemaVersion) {
+      return {
+        ...DEFAULT_SETTINGS,
+        ...prev,
+        general: { ...DEFAULT_SETTINGS.general, ...prev.general },
+        search: {
+          ...DEFAULT_SETTINGS.search,
+          ...prev.search,
+          weights: { ...DEFAULT_SETTINGS.search.weights, ...prev.search?.weights }
+        },
+        preview: { ...DEFAULT_SETTINGS.preview, ...prev.preview },
+        commands: { ...DEFAULT_SETTINGS.commands, ...prev.commands },
+        keyboard: { ...DEFAULT_SETTINGS.keyboard, ...prev.keyboard },
+        hotkeys: { ...DEFAULT_SETTINGS.hotkeys, ...prev.hotkeys }
+      };
+    }
+    if (!prev.schemaVersion || prev.schemaVersion === 0) {
+      const migrated = {
+        ...DEFAULT_SETTINGS,
+        schemaVersion: 1
+      };
+      if (prev.defaultHotkey) {
+        migrated.general.openHotkey = prev.defaultHotkey;
+      }
+      if (prev.searchLimit) {
+        migrated.general.maxResults = Math.min(Math.max(prev.searchLimit, 10), 1e3);
+      }
+      if (typeof prev.previewEnabled === "boolean") {
+        migrated.preview.inlineSnippet = prev.previewEnabled;
+      }
+      return migrated;
+    }
+    return { ...DEFAULT_SETTINGS, ...prev, schemaVersion: DEFAULT_SETTINGS.schemaVersion };
+  }
+  function validateFixedFolder(path) {
+    if (!path || path.trim() === "") {
+      return { isValid: true };
+    }
+    const normalized = path.trim().replace(/[\\]/g, "/");
+    if (normalized.includes("..") || normalized.startsWith("/")) {
+      return { isValid: false, error: 'Path cannot contain ".." or start with "/"' };
+    }
+    return { isValid: true };
+  }
+  function validateCommandsPrefix(char) {
+    if (!char || char.length !== 1) {
+      return { isValid: false, error: "Must be exactly one character" };
+    }
+    if (/\s/.test(char)) {
+      return { isValid: false, error: "Cannot be whitespace" };
+    }
+    return { isValid: true };
+  }
+  function toScorerConfig(settings) {
+    return {
+      weights: settings.search.weights,
+      diacritics: settings.search.diacritics,
+      recencyHalfLife: settings.search.recencyHalfLifeDays
+    };
+  }
+  function isCommandsQuery(input, settings) {
+    if (!settings.commands.enableCommandsPrefix) return false;
+    return input.startsWith(settings.commands.commandsPrefixChar);
+  }
+  function getNormalizedHotkeys(settings) {
+    const normalized = {};
+    for (const [action, chords] of Object.entries(settings.hotkeys)) {
+      normalized[action] = chords.map((chord) => {
+        let normalized2 = chord;
+        if (import_obsidian.Platform.isMacOS) {
+          normalized2 = normalized2.replace(/Ctrl/g, "\u2318").replace(/Alt/g, "\u2325");
+        } else {
+          normalized2 = normalized2.replace(/⌘/g, "Ctrl").replace(/⌥/g, "Alt");
+        }
+        return normalized2;
+      });
+    }
+    return normalized;
+  }
   var NvSwitcherSettingsTab = class extends import_obsidian.PluginSettingTab {
     constructor(app, plugin) {
       super(app, plugin);
+      this.saveTimeout = null;
       this.plugin = plugin;
     }
     display() {
       const { containerEl } = this;
       containerEl.empty();
       containerEl.createEl("h2", { text: "nv-switcher Settings" });
+      containerEl.createEl("h3", { text: "General" });
+      new import_obsidian.Setting(containerEl).setName("Open hotkey").setDesc("Keyboard shortcut to open the nv-switcher modal").addText((text) => text.setPlaceholder("\u2318N").setValue(this.plugin.settings.general.openHotkey).onChange(async (value) => {
+        this.plugin.settings.general.openHotkey = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Create location").setDesc("Where to create new notes").addDropdown((dropdown) => dropdown.addOption("root", "Vault root").addOption("same", "Same folder as active note").addOption("fixed", "Fixed folder").setValue(this.plugin.settings.general.createLocation).onChange(async (value) => {
+        this.plugin.settings.general.createLocation = value;
+        await this.debouncedSave();
+        this.display();
+      }));
+      if (this.plugin.settings.general.createLocation === "fixed") {
+        new import_obsidian.Setting(containerEl).setName("Fixed folder").setDesc("Folder path for new notes (relative to vault root)").addText((text) => text.setPlaceholder("Inbox").setValue(this.plugin.settings.general.fixedFolder).onChange(async (value) => {
+          const validation = validateFixedFolder(value);
+          if (validation.isValid) {
+            this.plugin.settings.general.fixedFolder = value;
+            await this.debouncedSave();
+          }
+        }));
+      }
+      new import_obsidian.Setting(containerEl).setName("Include code blocks").setDesc("Include code block content in search index").addToggle((toggle) => toggle.setValue(this.plugin.settings.general.includeCodeBlocks).onChange(async (value) => {
+        this.plugin.settings.general.includeCodeBlocks = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Max results").setDesc("Maximum number of search results to display (10-1000)").addSlider((slider) => slider.setLimits(10, 1e3, 10).setValue(this.plugin.settings.general.maxResults).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.general.maxResults = value;
+        await this.debouncedSave();
+      }));
+      containerEl.createEl("h3", { text: "Search" });
+      new import_obsidian.Setting(containerEl).setName("Search backend").setDesc("Search engine to use").addDropdown((dropdown) => dropdown.addOption("built-in", "Built-in (recommended)").addOption("auto", "Auto (built-in + omnisearch when available)").addOption("omni", "Omnisearch (if installed)").setValue(this.plugin.settings.search.backend).onChange(async (value) => {
+        this.plugin.settings.search.backend = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Diacritic folding").setDesc("Ignore accents and diacritics in search (caf\xE9 matches cafe)").addToggle((toggle) => toggle.setValue(this.plugin.settings.search.diacritics).onChange(async (value) => {
+        this.plugin.settings.search.diacritics = value;
+        await this.debouncedSave();
+      }));
+      containerEl.createEl("h4", { text: "Search Weights" });
+      const weights = this.plugin.settings.search.weights;
+      for (const [field, weight] of Object.entries(weights)) {
+        new import_obsidian.Setting(containerEl).setName(`${field.charAt(0).toUpperCase() + field.slice(1)} weight`).setDesc(`Boost factor for ${field} matches`).addSlider((slider) => slider.setLimits(0, 5, 0.1).setValue(weight).setDynamicTooltip().onChange(async (value) => {
+          this.plugin.settings.search.weights[field] = value;
+          await this.debouncedSave();
+        }));
+      }
+      containerEl.createEl("h3", { text: "Preview" });
+      new import_obsidian.Setting(containerEl).setName("Inline snippet").setDesc("Show inline text snippets in search results").addToggle((toggle) => toggle.setValue(this.plugin.settings.preview.inlineSnippet).onChange(async (value) => {
+        this.plugin.settings.preview.inlineSnippet = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Fragment length").setDesc("Length of text fragments in preview (60-240 characters)").addSlider((slider) => slider.setLimits(60, 240, 10).setValue(this.plugin.settings.preview.fragmentLength).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.preview.fragmentLength = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Max fragments").setDesc("Maximum number of preview fragments to show (1-5)").addSlider((slider) => slider.setLimits(1, 5, 1).setValue(this.plugin.settings.preview.maxFragments).setDynamicTooltip().onChange(async (value) => {
+        this.plugin.settings.preview.maxFragments = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Show frontmatter").setDesc("Display frontmatter in preview").addToggle((toggle) => toggle.setValue(this.plugin.settings.preview.showFrontmatter).onChange(async (value) => {
+        this.plugin.settings.preview.showFrontmatter = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Show tags").setDesc("Display tags in preview header").addToggle((toggle) => toggle.setValue(this.plugin.settings.preview.showTags).onChange(async (value) => {
+        this.plugin.settings.preview.showTags = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Show path").setDesc("Display file path in results").addToggle((toggle) => toggle.setValue(this.plugin.settings.preview.showPath).onChange(async (value) => {
+        this.plugin.settings.preview.showPath = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Highlight color").setDesc("Custom color for search highlights (leave empty for theme default)").addText((text) => text.setPlaceholder("#ffff00").setValue(this.plugin.settings.preview.highlightColor).onChange(async (value) => {
+        this.plugin.settings.preview.highlightColor = value;
+        this.plugin.applyHighlightColor();
+        await this.debouncedSave();
+      }));
+      containerEl.createEl("h3", { text: "Commands" });
+      new import_obsidian.Setting(containerEl).setName("Enable commands prefix").setDesc('Allow typing ">" to search and run commands').addToggle((toggle) => toggle.setValue(this.plugin.settings.commands.enableCommandsPrefix).onChange(async (value) => {
+        this.plugin.settings.commands.enableCommandsPrefix = value;
+        await this.debouncedSave();
+      }));
+      new import_obsidian.Setting(containerEl).setName("Commands prefix character").setDesc("Character to enter commands mode").addText((text) => text.setPlaceholder(">").setValue(this.plugin.settings.commands.commandsPrefixChar).onChange(async (value) => {
+        const validation = validateCommandsPrefix(value);
+        if (validation.isValid) {
+          this.plugin.settings.commands.commandsPrefixChar = value;
+          await this.debouncedSave();
+        }
+      }));
+      new import_obsidian.Setting(containerEl).setName("Show command IDs").setDesc("Display command IDs alongside names").addToggle((toggle) => toggle.setValue(this.plugin.settings.commands.showCommandIds).onChange(async (value) => {
+        this.plugin.settings.commands.showCommandIds = value;
+        await this.debouncedSave();
+      }));
+      containerEl.createEl("h3", { text: "Keyboard & Hotkeys" });
       containerEl.createEl("p", {
-        text: "Settings interface will be implemented in task 2."
+        text: "Hotkey customization will be implemented in a future version. Current defaults are listed in the plugin description."
       });
+    }
+    async debouncedSave() {
+      if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout);
+      }
+      this.saveTimeout = setTimeout(async () => {
+        await this.plugin.saveSettings();
+        this.saveTimeout = null;
+      }, 300);
     }
   };
   return __toCommonJS(plugin_exports);

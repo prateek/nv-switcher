@@ -1,0 +1,121 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Project scaffolding, build, and CI setup",
+        "description": "Initialize Obsidian plugin project with TypeScript, tsup bundling to a single main.js, testing (Vitest + JSDOM), linting, and GitHub Actions CI for typecheck, test, build, and release zip.",
+        "details": "Implementation:\n- Files: manifest.json, package.json, tsconfig.json, tsup.config.ts, .eslintrc, .prettierrc, vitest.config.ts, src/plugin.ts, src/styles.css, README.md, LICENSE (MIT).\n- manifest.json: { id: \"obsidian-nv-switcher\", name: \"nv-switcher\", version: \"1.0.0\", minAppVersion: \"1.5.0\", author, main: \"main.js\", description }.\n- package.json devDeps: obsidian (types), typescript, tsup, vitest, @vitest/ui, jsdom, eslint, @typescript-eslint/*, esbuild.\n- tsup: entry src/plugin.ts, format iife, globalName plugin, minify, sourcemap, target es2020, define process.env.NODE_ENV.\n- plugin.ts exports default class NvSwitcherPlugin extends Plugin { async onload() { ... } async onunload() { ... } }.\n- GitHub Actions: workflow to install deps, build, run tests, upload artifact (main.js, manifest.json, styles.css) as release asset on tag.\n- CSS: define --nv-switcher-highlight-color var fallback to theme.\nPseudo-code:\nclass NvSwitcherPlugin extends Plugin {\n  settings: Settings;\n  async onload() {\n    await this.loadSettings();\n    this.addSettingTab(new NvSwitcherSettingsTab(this.app, this));\n    this.registerCommands();\n  }\n  async loadSettings(){ this.settings = Object.assign(DEFAULT_SETTINGS, await this.loadData()); }\n  async saveSettings(){ await this.saveData(this.settings); }\n}\n",
+        "testStrategy": "Validation:\n- Build: tsup builds single main.js; verify manifest fields.\n- CI: PR triggers typecheck, lint, tests; tag v1.0.0 creates release artifact.\n- Unit: sanity tests load plugin class with mock app.\n- Manual: load plugin in Obsidian sandbox vault to ensure it appears and loads without errors.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Settings schema and SettingsTab UI",
+        "description": "Implement settings model covering General, Search, Preview, Commands mode, and Hotkeys customization as per PRD, with reactive storage and validation.",
+        "details": "Implementation:\n- Define Settings interface and DEFAULT_SETTINGS including:\n  General: openHotkey (⌘N), createLocation (root|same|fixed), fixedFolder, includeCodeBlocks (false), maxResults (100).\n  Search: backend (built-in|auto|omni), weights (title/headings/path/tags/symbols/body/recency), diacritics (true), regexCandidateK (300).\n  Preview: inlineSnippet (true), fragmentLength (120), maxFragments (3), showFrontmatter (false), showTags (true), showPath (true), highlightCssVar (\"--nv-switcher-highlight-color\").\n  Commands: enableCommandsPrefix (true), showCommandIds (false), openInSplitModifier (\"mod\").\n  Hotkeys: modalActions map: { moveUp, moveDown, open, forceCreate, openInSplit, focusPreview, cycleLeft, cycleRight, close } each as array of key chords, with sensible platform defaults (Cmd on macOS, Ctrl on Win/Linux).\n- SettingsTab: use PluginSettingTab to render toggles/sliders/inputs; validate folder path; persist on change with plugin.saveSettings(); debounce saves.\n- Expose getters to translate weights into scorer config.\n- CSS var: allow user to set custom highlight via settings -> write to documentElement style on load/unload.\nPseudo-code:\ninterface Settings { general: {...}; search: {...}; preview: {...}; commands: {...}; hotkeys: Record<string, string[]> }\nclass NvSwitcherSettingsTab extends PluginSettingTab { display(){ /* build UI, bind to this.plugin.settings */ } }\n",
+        "testStrategy": "Unit:\n- Settings load/save roundtrip with defaults.\n- Validation: creating fixed folder path; toggling diacritics and includeCodeBlocks persists.\n- UI (JSDOM): simulate setting changes and assert plugin.settings updated.\n- Snapshot: ensure weight sliders map to numeric values and within ranges.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Commands registration and Hotkey handling",
+        "description": "Register plugin commands and wire default hotkeys; centralize in-modal hotkey mapping with customizable bindings from Settings.",
+        "details": "Implementation:\n- Register commands via this.addCommand for:\n  - nv-switcher:open (default ⌘N): opens modal.\n  - nv-switcher:toggle-inline-snippet (unassigned): toggles preview.inlineSnippet setting.\n- For in-modal actions (J/K, Tab, Esc, Alt←/→, Shift+Enter, Cmd+Enter): implement a HotkeyManager reading plugin.settings.hotkeys and matching KeyboardEvent using Obsidian's Keymap.isModifier and Platform.isMacOS.\n- Cross-platform: map 'mod' to Meta on macOS, Ctrl elsewhere.\n- Open in split: in modal, when openInSplit action or mod+Enter, open in new leaf.\nPseudo-code:\nthis.addCommand({ id:'open', name:'Open nv-switcher', hotkeys:[{ modifiers:['Mod'], key:'n' }], callback:()=> new NvModal(this.app, this).open() })\nfunction matchHotkey(evt: KeyboardEvent, accel: string){ /* parse 'Mod-Enter', 'Shift-Enter', 'Alt-ArrowLeft' etc. */ }\n",
+        "testStrategy": "Integration (JSDOM):\n- Press mod+N opens modal instance.\n- In modal, simulate mapped keys to navigate and open.\n- Rebinding in settings updates behavior at runtime.\n- Verify open-in-split opens file in new leaf using workspace.getLeaf(true).",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Search types and provider interface",
+        "description": "Define types for Doc, ParsedQuery, SearchResult, and the SearchProvider interface to enable provider swapping.",
+        "details": "Implementation:\n- Types:\n  type Doc = { id: string; title: string; path: string[]; tags: string[]; headings: string[]; symbols: string[]; body: string; mtime: number; size: number };\n  type ParsedQuery = { raw: string; mode: 'files'|'commands'; terms: string[]; phrases: string[]; excludes: string[]; orGroups: string[][]; filters: { tag?: string[]; path?: string[]; in?: string[]; field?: 'headings'|'symbols' }; regex?: { source:string; flags:string } };\n  type MatchSpan = { field: keyof Doc, start: number, end: number };\n  type SearchResult = { id: string; score: number; matchSpans: MatchSpan[] };\n- SearchProvider interface as in PRD with Promise signatures.\n- Export discriminated unions for provider selection (BuiltInProvider default).\n- Utilities: normalizeText(str, diacritics:boolean): lowercases + NFD strip if enabled.\n",
+        "testStrategy": "Unit:\n- Type-level tests via tsd or compile checks.\n- Runtime guards: narrow ParsedQuery fields; ensure SearchResult schema contains required fields.\n- Contract tests: mock provider implementing interface, consumed by modal without knowledge of implementation.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Vault indexer with incremental updates and persistence",
+        "description": "Implement vaultIndex to extract Doc fields from TFiles, manage initial indexing, incremental updates on file events, and persist mtime/size cache to skip unchanged files.",
+        "details": "Implementation:\n- Module indexer/vaultIndex.ts exports class VaultIndex { indexAll(files:TFile[]): Promise<Doc[]>; upsert(file:TFile): Promise<Doc>; remove(file:TFile): Promise<void> }.\n- Extraction:\n  - title: file.basename\n  - path: tokens from dirname split('/').filter(Boolean)\n  - tags/headings/symbols: use app.metadataCache.getFileCache(file). Collect:\n    - headings: cache.headings?.map(h=>h.heading)\n    - tags: from cache.tags?.map(t=>t.tag.replace('#','')) and cache.frontmatter?.tags (normalize to array)\n    - symbols: links from cache.links?.map(l=>l.link), block refs: parse /\\^[A-Za-z0-9\\-_/]+/ in body, code labels: fenced code block info strings via regex /```(\\S+)/\n  - body: read via app.vault.read(file); lowercased; optionally strip fenced code blocks if settings.general.includeCodeBlocks === false.\n  - mtime, size from file.stat.\n- Persistence: plugin.loadData()/saveData() store map { path: { mtime, size } }. Skip re-tokenizing if unchanged.\n- Events: registerEvent(app.vault.on('create'|'modify'|'delete'|'rename', ...)) and metadataCache.on('changed') to update index and provider.upsert/remove.\n- Lazy body indexing: initially index titles+paths first (fast), then schedule body extraction in chunks using requestIdleCallback or setTimeout batching; on desktop optionally offload to Worker (guard by Platform.isDesktop, feature-flag later).\nPseudo-code:\nasync function indexAll(files){ for f of files { await upsertMeta(f); queueBodyIndex(f); } }\nasync function upsertMeta(f){ const doc = await extractDoc(f, {body:false}); provider.upsert(f, docPartial) }\nfunction queueBodyIndex(f){ enqueue(async()=> provider.upsert(f, await extractDoc(f, {body:true}))) }\n",
+        "testStrategy": "Unit:\n- vaultIndex.test.ts: simulate add/modify/delete/rename with fake TFile and metadataCache; assert Doc extraction.\n- Persistence: save mtime cache; modify mtime only when changed.\n- Incremental: modify triggers upsert once; delete triggers provider.remove.\n- Performance: batch queue respects max concurrency; on mobile, ensure chunking to avoid long tasks.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Query parser with filters, phrases, OR/NOT, regex, and commands mode",
+        "description": "Implement robust query parsing according to PRD including field prefixes (#, @), tag/path filters, quoted phrases, -exclude, OR groups, fuzzy default, and /regex/ with i flag.",
+        "details": "Implementation:\n- Input router: if q.trim().startsWith('>') and settings.commands.enableCommandsPrefix -> return { mode:'commands', raw:q, ... }.\n- Tokenizer:\n  - Extract /\\\"([^\\\"]+)\\\"/ for phrases; remove from string.\n  - Extract regex: \\/((?:\\\\\\/|[^\\/])+?)\\/(i?); validate try new RegExp(source, flags), on error set regex undefined + error message.\n  - Split remaining by whitespace; classify tokens:\n    - '-term' -> excludes\n    - 'OR' -> delimit OR groups (collect between ORs)\n    - 'tag:foo' or '#foo' (as token) -> filters.tag push 'foo'\n    - 'path:proj/x' or 'in:Inbox' -> filters.path or filters.in\n    - '#' alone prefix: set filters.field='headings'\n    - '@' alone prefix: set filters.field='symbols'\n    - otherwise -> terms push token\n- Return ParsedQuery with arrays; preserve raw.\n- Build highlight regex: combine normalized tokens into word-boundary aware regex: new RegExp(`(\\\\b(?:${terms.map(esc).join('|')}))`, 'ig').\nHelper: esc(s) = s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')\n",
+        "testStrategy": "Unit (queryParser.test.ts):\n- Cases: >cmd, #heading-only, @symbols, tag:foo and #foo, path:proj/x, in:Inbox, \"exact phrase\", /regex/i valid and invalid, OR groups, -exclude, empty query.\n- Ensure ParsedQuery.mode flips between files and commands; invalid regex flagged and ignored.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Scoring model with fuzzy/prefix and recency bonus",
+        "description": "Implement fuzzy and prefix scoring per field, configurable weights, diacritic folding, and recency bonus up to 0.5.",
+        "details": "Implementation:\n- normalizeText(str, diacritics) as in task 4; tokenization by /[\\p{L}\\p{N}_-]+/u.\n- Fuzzy metric: use optimized token-level Levenshtein prefix-aware scoring:\n  scoreToken(query, text){\n    if (text.startsWith(query)) return 1;\n    const dist = damerauLevenshtein(query, text); // cap at 2 for perf\n    return Math.max(0, 1 - dist / Math.max(query.length, text.length));\n  }\n- Field fuzzy(fieldValue, terms): compute max score across tokens per term; aggregate as average across terms.\n- Phrase match: boost by +0.25 per phrase exact match occurrence in title/body.\n- recencyBonus(mtime): now=Date.now(); ageDays=(now-mtime)/86400000; return clamp(0.5 * Math.exp(-ageDays/30), 0, 0.5).\n- Overall:\n  total = w_title*f(title) + w_headings*f(headings) + w_path*f(path) + w_tags*f(tags) + w_symbols*f(symbols) + w_body*f(body) + recencyBonus.\n- Respect excludes by subtracting large penalty or removing candidate earlier.\n- Export scorer(configFromSettings).\nPseudo-code:\nfunction scoreDoc(doc, pq, weights){ let s=0; s += weights.title*f(doc.title); ...; s += recencyBonus(doc.mtime); return s }\n",
+        "testStrategy": "Unit (scorer.test.ts):\n- Verify weights affect ordering deterministically.\n- Recency: newer docs get <=0.5 bonus; older decay.\n- Prefix matches outrank non-prefix fuzzy for same field.\n- Diacritics folding: 'cafe' matches 'café'.\n- Excludes remove hits containing the term.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Built-in search provider with inverted index and regex post-filter",
+        "description": "Implement BuiltInProvider using a MiniSearch-style inverted index, supporting indexAll, upsert, remove, and query with filters, fuzzy/prefix, weights, and regex applied to top-K candidates.",
+        "details": "Implementation:\n- Data structures:\n  - term -> posting list of docIds with per-field term frequency and token positions.\n  - doc store: Map<id, Doc>.\n- Indexing:\n  - For each field (title, path, headings, tags, symbols, body), tokenize normalized values and store positions.\n  - Keep body length cap (e.g., 2MB) to skip huge files.\n- Query:\n  - If empty ParsedQuery and no terms/filters -> return recent notes by mtime desc.\n  - Build candidate set by union across terms with AND semantics enforced by intersection unless pq.orGroups present.\n  - Apply filters: tags, path prefixes, 'in' folder exact or prefix.\n  - For field filter (# or @), restrict scoring to that field.\n  - Score using scorer from task 7; maintain top N by heap up to settings.general.maxResults.\n  - Regex: if pq.regex present, take top K (settings.search.regexCandidateK, default 300), apply RegExp to original body/title; discard non-matching.\n  - Return SearchResult[] with matchSpans for highlighting: for each term found, compute approximate positions from index tokens; for regex, compute match indices.\n- Portability: pure TS, no native binaries; consider vendoring minimal code for Damerau-Levenshtein or implement lightweight version.\nPseudo-code:\nclass BuiltInProvider implements SearchProvider { async indexAll(files){...}; async upsert(file, content){...}; async remove(file){...}; async query(pq, limit){ if (isEmpty(pq)) return recent(); const candidates = gatherCandidates(pq); const scored = scoreAll(candidates); const filtered = applyRegexIfAny(scored); return topN(filtered, limit); } }\n",
+        "testStrategy": "Unit (builtInProvider.test.ts):\n- Index docs and ensure deterministic top-k for known queries.\n- Filters: tag, path, in-folder, field-only (#/@) behave as expected.\n- Regex: only applied to top-K; invalid regex ignored.\n- Update: upsert modifies index; remove prunes postings.\n- Empty query returns recent by mtime desc.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Modal UI with results, create/open semantics, commands mode, and preview",
+        "description": "Build the nvALT-like modal with one input, results list (with inline snippet and right-side mtime/path), and bottom preview with multi-fragment highlights and keyboard navigation.",
+        "details": "Implementation:\n- modal.tsx: Custom modal based on SuggestModal or own Modal with React-like rendering (or vanilla DOM). Structure: top input, middle results (listbox role), bottom preview pane (fixed height).\n- Results item: left: Title — inline snippet (~120 chars) with <mark>; right: modified relative date + small path.\n- Inline snippet: preview/snippet.ts to select best-first fragment near top hit; highlight.ts to wrap with <mark> using a single combined regex.\n- Preview pane: generate N fragments (default 3, up to 5), merge overlapping, provide ◀ ▶ buttons with aria-label and keyboard Alt←/→ cycling; header line shows file title and optional chips tags/path.\n- Commands mode: if input starts with '>' switch to commands; fetch commands via app.commands.listCommands(); fuzzy filter by name/id; Enter executes via app.commands.executeCommandById(id); mod+Enter tries open in split when command supports target leaf (if not, ignore).\n- Create/Open:\n  - Enter: if matches exist -> open selected; if zero matches -> create Query.md.\n  - Shift+Enter: force-create using current input.\n  - Path support: parse folder/Note; ensure folder exists via app.vault.createFolder before create; on collision open existing file.\n  - Open: use workspace.getLeaf(isSplit) and leaf.openFile(file).\n- Keyboard:\n  - Up/Down and J/K (Cmd or Ctrl by platform) move selection.\n  - Tab focuses preview; Esc returns to input; Esc again closes.\n  - mod+Enter opens in split.\n- Empty query: show recent notes by mtime desc (from provider or vault index).\n- Accessibility: listbox/option roles, aria-selected, focus ring, ensure <mark> contrast via CSS var.\n- Virtualization (optional): if results > 200, render windowed rows based on scroll position.\nPseudo-code:\nclass NvModal extends Modal { onOpen(){ /* build DOM, bind input */ } onInput(q){ const pq=parseQuery(q); if (pq.mode==='commands') showCommands(); else showFiles(provider.query(pq, maxResults)); } onEnter(){ /* create/open semantics */ } renderPreview(file, fragments){ /* bottom pane */ } }\n",
+        "testStrategy": "Integration (modal.behavior.test.ts with JSDOM):\n- Typing query updates list within 200ms budget (mock timers).\n- Enter opens existing; Shift+Enter creates even with matches; zero-result shows Create \"{Query}\" row.\n- Commands mode: '>' shows commands; Enter executes stubbed command; mod+Enter attempts split open.\n- Keyboard: J/K or Arrow keys navigate; Tab/Esc focus behavior; Alt←/→ cycles fragments.\n- Accessibility: roles, aria-selected toggles; chevron buttons have aria-labels.\n- Edge cases: invalid regex shows inline error chip; create path collision opens existing.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Test suites (unit and integration) and performance validation",
+        "description": "Implement TDD-first automated tests for parser, scorer, snippet/highlight, vault indexer, built-in provider, and modal behaviors; add basic performance harness and acceptance checks.",
+        "details": "Implementation:\n- Vitest config: environment jsdom for integration; node for unit.\n- Unit tests:\n  - queryParser.test.ts: >cmd, #heading, @symbol, tag:foo, path:x, \"phrase\", /regex/i, OR, -exclude, empty query.\n  - scorer.test.ts: field weights & recency; diacritics.\n  - snippet.test.ts: fragment selection, ellipses, overlap merge, HTML escape, <mark> highlights, fragment length bounds (60–240).\n  - vaultIndex.test.ts: add/modify/delete/rename; headings/tags/symbols extraction; includeCodeBlocks toggle.\n  - builtInProvider.test.ts: indexAll, upsert, remove, query with deterministic results; regex candidate cap K.\n- Integration (JSDOM): modal.behavior.test.ts covering open/create, commands execution, navigation, focus behavior, fragment cycling, zero-result state.\n- Performance checks:\n  - Seed 10k synthetic docs; ensure query pipeline returns first results <200ms on desktop env by mocking timers and measuring code path; ensure regex applied to top-K only.\n- CI: gate on tests; collect coverage thresholds ≥80% for core logic.\n",
+        "testStrategy": "Execution:\n- Run vitest watch in development; ensure failures drive implementation (TDD).\n- Include snapshot tests for DOM structure of modal rows and preview.\n- Simulate mobile by throttling timers and verifying no long blocking tasks (>50ms chunks).\n- Acceptance criteria mapping: write tests verifying all 8 acceptance bullets in PRD.",
+        "priority": "medium",
+        "dependencies": [],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-08-21T01:58:07.396Z",
+      "updated": "2025-08-21T02:59:18.840Z",
+      "description": "Tasks for master context"
+    }
+  }
+}

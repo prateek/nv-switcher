@@ -1,0 +1,37 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__taskmaster-ai__parse_prd",
+      "mcp__taskmaster-ai__models",
+      "mcp__task-master-ai__parse_prd",
+      "mcp__task-master-ai__get_tasks",
+      "mcp__task-master-ai__next_task",
+      "mcp__task-master-ai__set_task_status",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(npm install)",
+      "Bash(npm run build:*)",
+      "Bash(npm test)",
+      "mcp__zen__debug",
+      "Bash(npm test:*)",
+      "Bash(node:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "mcp__exa__web_search_exa",
+      "Bash(rm:*)",
+      "mcp__taskmaster-ai__get_tasks",
+      "mcp__taskmaster-ai__get_task",
+      "mcp__serena__list_dir",
+      "Bash(npm run lint)",
+      "mcp__taskmaster-ai__set_task_status",
+      "Bash(git add:*)",
+      "Bash(git rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "task-master-ai"
+  ]
+}

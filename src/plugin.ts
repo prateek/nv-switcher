@@ -1,7 +1,9 @@
 // ABOUTME: Main nv-switcher plugin class providing nvALT-style note switching
 // ABOUTME: Handles plugin lifecycle, settings, commands and modal registration
 
-import { App, Plugin, PluginSettingTab, Platform, Setting } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Platform, Setting, Notice } from 'obsidian';
+import { HotkeyManager } from './hotkey-manager';
+import { NvModal } from './modal';
 
 interface NvSwitcherSettings {
 	schemaVersion: number;
@@ -131,23 +133,76 @@ const DEFAULT_SETTINGS: NvSwitcherSettings = {
 
 export default class NvSwitcherPlugin extends Plugin {
 	settings: NvSwitcherSettings = DEFAULT_SETTINGS;
+	hotkeyManager: HotkeyManager | null = null;
 
 	async onload() {
 		await this.loadSettings();
-
-		// Register the main nv-switcher command
-		this.addCommand({
-			id: 'open-nv-switcher',
-			name: 'Open nv-switcher',
-			hotkeys: [{ modifiers: ['Ctrl'], key: 'o' }],
-			callback: () => {
-				// TODO: Open the search modal
-				console.log('nv-switcher opened');
-			}
-		});
+		this.registerCommands();
 
 		// Add settings tab
 		this.addSettingTab(new NvSwitcherSettingsTab(this.app, this));
+	}
+
+	private registerCommands() {
+		// Initialize hotkey manager
+		this.hotkeyManager = new HotkeyManager(this.settings.hotkeys);
+
+		// Register the main nv-switcher command with hotkey from settings
+		const openHotkey = this.settings.general.openHotkey || (Platform.isMacOS ? '⌘N' : 'Ctrl+N');
+		const openHotkeys = HotkeyManager.parseAccelToObsidianHotkeys(openHotkey);
+
+		this.addCommand({
+			id: 'open',
+			name: 'Open nv-switcher',
+			hotkeys: openHotkeys,
+			callback: () => {
+				this.openModal();
+			}
+		});
+
+		// Register toggle inline snippet command
+		this.addCommand({
+			id: 'toggle-inline-snippet',
+			name: 'Toggle inline snippet',
+			callback: async () => {
+				this.settings.preview.inlineSnippet = !this.settings.preview.inlineSnippet;
+				await this.saveSettings();
+				
+				// Show a brief notice about the change
+				new Notice(
+					`Inline snippets ${this.settings.preview.inlineSnippet ? 'enabled' : 'disabled'}`
+				);
+			}
+		});
+	}
+
+	private openModal() {
+		const modal = new NvModal(this.app, this);
+		modal.open();
+	}
+
+	/**
+	 * Open a file in a new split
+	 */
+	async openFileInSplit(filePath: string) {
+		const file = this.app.vault.getAbstractFileByPath(filePath);
+		if (file) {
+			const leaf = this.app.workspace.getLeaf(true);
+			await leaf.openFile(file as any);
+		}
+	}
+
+	/**
+	 * Open a file in the current leaf
+	 */
+	async openFile(filePath: string) {
+		const file = this.app.vault.getAbstractFileByPath(filePath);
+		if (file) {
+			const leaf = this.app.workspace.activeLeaf;
+			if (leaf) {
+				await leaf.openFile(file as any);
+			}
+		}
 	}
 
 	onunload() {
@@ -158,10 +213,20 @@ export default class NvSwitcherPlugin extends Plugin {
 		const data = await this.loadData();
 		this.settings = migrateSettings(data);
 		this.applyHighlightColor();
+		
+		// Update hotkey manager if it exists
+		if (this.hotkeyManager) {
+			this.hotkeyManager.updateHotkeys(this.settings.hotkeys);
+		}
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		
+		// Update hotkey manager when settings change
+		if (this.hotkeyManager) {
+			this.hotkeyManager.updateHotkeys(this.settings.hotkeys);
+		}
 	}
 
 	applyHighlightColor() {
@@ -188,6 +253,10 @@ export default class NvSwitcherPlugin extends Plugin {
 
 	getNormalizedHotkeys(): Record<string, string[]> {
 		return getNormalizedHotkeys(this.settings);
+	}
+
+	getHotkeyManager(): HotkeyManager | null {
+		return this.hotkeyManager;
 	}
 }
 
@@ -270,7 +339,7 @@ function validateCommandsPrefix(char: string): { isValid: boolean; error?: strin
 }
 
 // Settings helper methods
-function toScorerConfig(settings: NvSwitcherSettings) {
+function toScorerConfig(settings: NvSwitcherSettings): import('./search/scorer').ScorerConfig {
 	return {
 		weights: settings.search.weights,
 		diacritics: settings.search.diacritics,

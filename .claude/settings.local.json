@@ -44,7 +44,9 @@
       "Bash(grep:*)",
       "Bash(sed:*)",
       "Bash(cat:*)",
-      "Bash(npx vitest run:*)"
+      "Bash(npx vitest run:*)",
+      "mcp__taskmaster-ai__validate_dependencies",
+      "mcp__serena__search_for_pattern"
     ],
     "deny": [],
     "ask": []

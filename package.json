@@ -1,24 +1,32 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-nv-switcher",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "nvALT-style note switching with fuzzy search, quick creation, and preview",
 	"main": "main.js",
 	"scripts": {
-		"dev": "node esbuild.config.mjs",
-		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"dev": "tsup --watch",
+		"build": "tsc -noEmit -skipLibCheck && tsup",
+		"test": "vitest run --bail=1",
+		"test:ui": "vitest --ui",
+		"lint": "eslint src --ext .ts",
+		"lint:fix": "eslint src --ext .ts --fix",
+		"format": "prettier --write src",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": [],
-	"author": "",
+	"keywords": ["obsidian", "plugin", "search", "nvalt", "fuzzy"],
+	"author": "Prateek Rungta",
 	"license": "MIT",
 	"devDependencies": {
-		"@types/node": "^16.11.6",
-		"@typescript-eslint/eslint-plugin": "5.29.0",
-		"@typescript-eslint/parser": "5.29.0",
-		"builtin-modules": "3.3.0",
-		"esbuild": "0.17.3",
+		"@types/node": "^20.0.0",
+		"@typescript-eslint/eslint-plugin": "^6.0.0",
+		"@typescript-eslint/parser": "^6.0.0",
+		"@vitest/ui": "^1.0.0",
+		"eslint": "^8.0.0",
+		"jsdom": "^23.0.0",
 		"obsidian": "latest",
-		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"prettier": "^3.0.0",
+		"tsup": "^8.0.0",
+		"typescript": "^5.0.0",
+		"vitest": "^1.0.0"
 	}
 }

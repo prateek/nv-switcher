@@ -1,8 +1,24 @@
-/*
+/* ABOUTME: CSS styles for nv-switcher plugin modal and UI components */
+/* ABOUTME: Defines theme-aware colors and layout for nvALT-style interface */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+:root {
+	--nv-switcher-highlight-color: var(--text-accent, #7c3aed);
+	--nv-switcher-modal-bg: var(--background-primary);
+	--nv-switcher-border: var(--background-modifier-border);
+	--nv-switcher-text: var(--text-normal);
+	--nv-switcher-text-muted: var(--text-muted);
+}
 
-If your plugin does not need CSS, delete this file.
+/* Base styles for nv-switcher modal - will be expanded in task 9 */
+.nv-switcher-modal {
+	background: var(--nv-switcher-modal-bg);
+	border: 1px solid var(--nv-switcher-border);
+	border-radius: 8px;
+}
 
-*/
+.nv-switcher-highlight {
+	background-color: var(--nv-switcher-highlight-color);
+	color: var(--text-on-accent);
+	padding: 1px 3px;
+	border-radius: 3px;
+}

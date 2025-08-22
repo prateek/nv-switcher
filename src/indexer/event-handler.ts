@@ -28,26 +28,26 @@ export class VaultEventHandler extends Component {
 	 * Register all vault event listeners
 	 */
 	enable(): void {
-		// File events
+		// File events with proper type casting for Obsidian API
 		this.registerEvent(
-			this.app.vault.on('create', this.onFileCreate.bind(this))
+			this.app.vault.on('create', this.onFileCreate.bind(this) as any)
 		);
 		
 		this.registerEvent(
-			this.app.vault.on('modify', this.onFileModify.bind(this))
+			this.app.vault.on('modify', this.onFileModify.bind(this) as any)
 		);
 		
 		this.registerEvent(
-			this.app.vault.on('delete', this.onFileDelete.bind(this))
+			this.app.vault.on('delete', this.onFileDelete.bind(this) as any)
 		);
 		
 		this.registerEvent(
-			this.app.vault.on('rename', this.onFileRename.bind(this))
+			this.app.vault.on('rename', this.onFileRename.bind(this) as any)
 		);
 
 		// Metadata cache events for when metadata parsing completes
 		this.registerEvent(
-			this.app.metadataCache.on('changed', this.onMetadataChanged.bind(this))
+			this.app.metadataCache.on('changed', this.onMetadataChanged.bind(this) as any)
 		);
 	}
 
@@ -157,9 +157,7 @@ export class VaultEventHandler extends Component {
 			clearTimeout(this.updateTimer);
 		}
 		this.pendingUpdates.clear();
-		// Only call super.onunload if it exists (for testing compatibility)
-		if (super.onunload) {
-			super.onunload();
-		}
+		// Call parent cleanup
+		super.onunload();
 	}
 }

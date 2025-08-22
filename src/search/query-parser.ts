@@ -7,7 +7,7 @@ import { createHighlightRegex, escapeRegex } from './normalize';
 /**
  * Settings interface for query parsing
  */
-interface QueryParserSettings {
+export interface QueryParserSettings {
 	commands: {
 		enableCommandsPrefix: boolean;
 		commandsPrefixChar: string;

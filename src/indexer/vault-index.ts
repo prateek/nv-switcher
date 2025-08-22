@@ -319,7 +319,9 @@ export class VaultIndex {
 			// Code block labels: ```language
 			const codeLabels = content.matchAll(/```(\S+)/g);
 			for (const match of codeLabels) {
-				symbols.add(match[1]);
+				if (match[1]) {
+					symbols.add(match[1]);
+				}
 			}
 		} catch (error) {
 			console.warn(`Failed to extract symbols from ${file.path}:`, error);

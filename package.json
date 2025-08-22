@@ -6,27 +6,42 @@
 	"scripts": {
 		"dev": "tsup --watch",
 		"build": "tsc -noEmit -skipLibCheck && tsup",
-		"test": "vitest run --bail=1",
+		"test": "run-s test:unit test:e2e",
+		"test:unit": "vitest run --bail=1",
 		"test:ui": "vitest --ui",
+		"test:e2e": "npx wdio run ./wdio.conf.mts",
+		"test:e2e:debug": "npx wdio run ./wdio.conf.mts --debug",
 		"lint": "eslint src --ext .ts",
 		"lint:fix": "eslint src --ext .ts --fix",
 		"format": "prettier --write src",
 		"version": "node version-bump.mjs && git add manifest.json versions.json"
 	},
-	"keywords": ["obsidian", "plugin", "search", "nvalt", "fuzzy"],
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"search",
+		"nvalt",
+		"fuzzy"
+	],
 	"author": "Prateek Rungta",
 	"license": "MIT",
 	"devDependencies": {
+		"@playwright/test": "^1.55.0",
 		"@types/node": "^20.0.0",
 		"@typescript-eslint/eslint-plugin": "^6.0.0",
 		"@typescript-eslint/parser": "^6.0.0",
 		"@vitest/ui": "^1.0.0",
+		"@wdio/cli": "^9.19.1",
+		"@wdio/spec-reporter": "^9.19.1",
 		"eslint": "^8.0.0",
+		"fast-check": "^4.2.0",
 		"jsdom": "^23.0.0",
 		"obsidian": "latest",
+		"playwright": "^1.55.0",
 		"prettier": "^3.0.0",
 		"tsup": "^8.0.0",
 		"typescript": "^5.0.0",
-		"vitest": "^1.0.0"
+		"vitest": "^1.0.0",
+		"wdio-obsidian-service": "^2.1.1"
 	}
 }

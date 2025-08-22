@@ -2,6 +2,7 @@
 // ABOUTME: Defines the async contract for search providers and factory pattern for creation
 
 import type { Doc, ParsedQuery, SearchResult, QueryOptions } from './types';
+import { BuiltInProvider } from './built-in-provider';
 
 /**
  * Core search provider interface defining the contract for all search backends.
@@ -52,6 +53,17 @@ export interface SearchProvider {
 	 * @returns Array of search results sorted by score (descending)
 	 */
 	query(q: ParsedQuery, opts?: QueryOptions): Promise<SearchResult[]>;
+
+	/**
+	 * Execute a search query and stream results progressively.
+	 * Results are yielded as they're found and scored, allowing for
+	 * immediate UI updates and better perceived performance.
+	 * 
+	 * @param q Parsed query to execute
+	 * @param opts Optional query options including limit and cancellation signal
+	 * @returns Async generator yielding search results as they're computed
+	 */
+	queryStream?(q: ParsedQuery, opts?: QueryOptions): AsyncGenerator<SearchResult, void, unknown>;
 	
 	/**
 	 * Clear all indexed documents and reset to empty state.
@@ -118,12 +130,9 @@ export type ProviderFactory = (config?: ProviderConfig) => SearchProvider;
  * @returns Search provider instance
  */
 export function createProvider(config: ProviderConfig = DEFAULT_PROVIDER_CONFIG): SearchProvider {
-	// Placeholder implementation - actual providers will be plugged in later
-	// For now, return a stub that satisfies the interface
-	
 	if (config.kind === 'builtIn') {
-		// Will be replaced with actual BuiltInProvider import
-		return createStubProvider('built-in');
+		// Create BuiltInProvider with options
+		return new BuiltInProvider(config.options);
 	} else if (config.kind === 'external') {
 		// Will be replaced with external provider factory/plugin system
 		return createStubProvider(config.name);
@@ -155,6 +164,11 @@ function createStubProvider(name: string): SearchProvider {
 		async query(q: ParsedQuery, opts?: QueryOptions): Promise<SearchResult[]> {
 			console.log(`[${name}] Querying: ${q.raw} (stub)`);
 			return [];
+		},
+		
+		async *queryStream(q: ParsedQuery, opts?: QueryOptions): AsyncGenerator<SearchResult, void, unknown> {
+			console.log(`[${name}] Streaming query: ${q.raw} (stub)`);
+			// Stub implementation yields nothing
 		},
 		
 		async clear(): Promise<void> {

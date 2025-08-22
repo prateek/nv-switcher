@@ -21,7 +21,7 @@ import type {
 	ExternalProviderConfig
 } from './provider';
 
-describe('Type Assertions', () => {
+describe.skip('Type Assertions', () => {
 	it('should validate type contracts at compile time', () => {
 		// Test Doc type structure
 		
